@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <meta charset='utf-8'>
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <meta name="description" content="Program : ">
+
+    <link rel="stylesheet" type="text/css" media="screen" href="stylesheets/stylesheet.css">
+
+    <title>Program</title>
+  </head>
+
+  <body>
+
+    <!-- HEADER -->
+    <div id="header_wrap" class="outer">
+        <header class="inner">
+          <a id="forkme_banner" href="https://github.com/gammaoverlord/program">View on GitHub</a>
+
+          <h1 id="project_title">Program</h1>
+          <h2 id="project_tagline"></h2>
+
+            <section id="downloads">
+              <a class="zip_download_link" href="https://github.com/gammaoverlord/program/zipball/master">Download this project as a .zip file</a>
+              <a class="tar_download_link" href="https://github.com/gammaoverlord/program/tarball/master">Download this project as a tar.gz file</a>
+            </section>
+        </header>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div id="main_content_wrap" class="outer">
+      <section id="main_content" class="inner">
+        <p>﻿//rito hire me pls</p>
+
+<h1>
+<a id="region" class="anchor" href="#region" aria-hidden="true"><span class="octicon octicon-link"></span></a>region</h1>
+
+<p>using System;
+using System.Collections.Generic;
+using System.Linq;
+using LeagueSharp;
+using LeagueSharp.Common;</p>
+
+<h1>
+<a id="endregion" class="anchor" href="#endregion" aria-hidden="true"><span class="octicon octicon-link"></span></a>endregion</h1>
+
+<p>namespace RefundExploiter
+{
+    internal class Program
+    {
+        public static Menu Menu;</p>
+
+<pre><code>    public static List&lt;int&gt; Consumables = new List&lt;int&gt; { 2003, 2004, 2009, 2010, 2037, 2039, 2043, 2044, 2047 };
+    public static List&lt;int&gt; NoCD = new List&lt;int&gt; { 3074, 3140, 3153, };
+
+    public static int RefundItemId = 0;
+    private static byte RefundInventorySlot;
+
+    public static bool Swapped = false;
+    public static bool Refunded = false;
+    public static bool BotrkInSlot = false;
+
+    private static void Main(string[] args)
+    {
+        CustomEvents.Game.OnGameLoad += Game_OnGameLoad;
+    }
+
+    private static void Game_OnGameLoad(EventArgs args)
+    {
+        Menu = new Menu("RefundExploiter", "RefundExploiter", true);
+        Menu.AddItem(new MenuItem("Enabled", "Enabled").SetValue(false));
+        Menu.AddItem(new MenuItem("Consumables", "Exploit Consumables").SetValue(true));
+        Menu.AddItem(new MenuItem("NoCD", "Exploit No-CD Items").SetValue(true));
+        Menu.AddItem(new MenuItem("Cast", "Cast").SetValue(new KeyBind(32, KeyBindType.Press)));
+        Menu.AddToMainMenu();
+
+        Game.OnGameProcessPacket += Game_OnGameProcessPacket;
+        Game.OnGameUpdate += Game_OnGameUpdate;
+        Game.PrintChat("Refund Exploit by Trees and blm95 loaded!");
+        //rito hire me pls
+    }
+
+    private static void Game_OnGameUpdate(EventArgs args)
+    {
+        if (!BotrkInSlot || !Menu.Item("Cast").GetValue&lt;KeyBind&gt;().Active)
+        {
+            return;
+        }
+
+        ObjectManager.Player.IssueOrder(GameObjectOrder.MoveTo, Game.CursorPos);
+
+        foreach (var p in
+            ObjectManager.Get&lt;Obj_AI_Hero&gt;()
+                .Where(h =&gt; h.IsValidTarget(500))
+                .Select(enemy =&gt; new Packet.C2S.Cast.Struct(enemy.NetworkId, SpellSlot.Trinket)))
+        {
+            Packet.C2S.Cast.Encoded(p).Send();
+        }
+    }
+
+    private static void Game_OnGameProcessPacket(GamePacketEventArgs args)
+    {
+        if (!Menu.Item("Enabled").GetValue&lt;bool&gt;())
+        {
+            return;
+        }
+
+        if (args.PacketData[0] == Packet.S2C.BuyItemAns.Header)
+        {
+            var dp = Packet.S2C.BuyItemAns.Decoded(args.PacketData);
+            if (dp.NetworkId != ObjectManager.Player.NetworkId || dp.SpellSlot == SpellSlot.Trinket)
+            {
+                return;
+            }
+
+            if ((Consumables.Contains(dp.Item.Id) &amp;&amp; Menu.Item("Consumables").GetValue&lt;bool&gt;()))
+            {
+                Refunded = true;
+                Packet.C2S.Undo.Encoded().Send();
+            }
+            else if (NoCD.Contains(dp.Item.Id) &amp;&amp; Menu.Item("NoCD").GetValue&lt;bool&gt;())
+            {
+                Refunded = true;
+                RefundItemId = dp.Item.Id;
+                RefundInventorySlot = dp.InventorySlot;
+                Packet.C2S.Undo.Encoded().Send();
+            }
+        }
+        else if (args.PacketData[0] == Packet.MultiPacket.Header &amp;&amp;
+                 args.PacketData[5] == Packet.MultiPacket.UndoConfirm.SubHeader &amp;&amp; Refunded)
+        {
+            Refunded = false;
+
+            if (RefundItemId == 0) // consumable item
+            {
+                args.Process = false;
+                return;
+            }
+
+            if (ObjectManager.Player.Spellbook.GetSpell(SpellSlot.Trinket).Name == "nospelldata")
+            {
+                SwapToTrinket();
+                return;
+            }
+
+            SellTrinket();
+        }
+        else if (args.PacketData[0] == Packet.S2C.SwapItemAns.Header &amp;&amp; RefundItemId != 0 &amp;&amp; Swapped)
+        {
+            var dp = Packet.S2C.SwapItemAns.Decoded(args.PacketData);
+            if (dp.ToInventorySlot == 6)
+            {
+                RecvItemToTrinket(RefundItemId);
+                RefundItemId = 0;
+                RefundInventorySlot = 0;
+                Swapped = false;
+            }
+        }
+        else if (args.PacketData[0] == Packet.S2C.SellItemAns.Header)
+        {
+            var dp = Packet.S2C.SellItemAns.Decoded(args.PacketData);
+            if (dp.SpellSlot == SpellSlot.Trinket)
+            {
+                SwapToTrinket();
+            }
+        }
+    }
+
+    private static void SellTrinket(int networkId = -1)
+    {
+        var p = new GamePacket(0x9);
+        p.WriteInteger(networkId == -1 ? ObjectManager.Player.NetworkId : networkId);
+        p.WriteByte(6);
+        p.WriteByte(0);
+        p.Send();
+    }
+
+    private static void SwapToTrinket()
+    {
+        Swapped = true;
+        BotrkInSlot = true;
+        Packet.C2S.SwapItem.Encoded(new Packet.C2S.SwapItem.Struct(RefundInventorySlot, 6)).Send();
+    }
+
+    private static void RecvItemToTrinket(int id)
+    {
+        var trinketId = 0;
+        switch (Game.MapId)
+        {
+            case GameMapId.SummonersRift:
+                trinketId = 3340;
+                break;
+            case GameMapId.CrystalScar:
+                trinketId = 3345;
+                break;
+            case GameMapId.HowlingAbyss:
+                trinketId = 2052;
+                break;
+            default:
+                return;
+        }
+
+        Packet.S2C.BuyItemAns.Encoded(new Packet.S2C.BuyItemAns.Struct(trinketId, 6, 0xA9)).Process();
+    }
+}
+</code></pre>
+      </section>
+    </div>
+
+    <!-- FOOTER  -->
+    <div id="footer_wrap" class="outer">
+      <footer class="inner">
+        <p class="copyright">Program maintained by <a href="https://github.com/gammaoverlord">gammaoverlord</a></p>
+        <p>Published with <a href="http://pages.github.com">GitHub Pages</a></p>
+      </footer>
+    </div>
+
+    
+
+  </body>
+</html>
